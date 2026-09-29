@@ -23,7 +23,7 @@ async function authorizeVK() {
     try {
         const result = await vkBridge.send("VKWebAppGetAuthToken", {
             app_id: 54794238,
-            scope: "video,wall,offline"
+            scope: "wall"
         });
         if (result.access_token) {
             await fetch(API_BASE + "/api/auth", {
