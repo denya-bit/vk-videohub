@@ -1,4 +1,4 @@
-const API_BASE = "http://141.98.164.186:8766";
+const API_BASE = "https://api.denya24.ru";
 let userId = 0;
 
 async function initVK() {
