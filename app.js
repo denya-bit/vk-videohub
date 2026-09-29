@@ -73,6 +73,7 @@ async function authorizeVK() {
 }
 
 function switchTab(tabId) {
+    if (typeof tabId !== "string") tabId = tabId.id || tabId.target?.dataset?.tab || "tabDownload";
     document.querySelectorAll(".content").forEach(el => el.classList.add("hidden"));
     document.getElementById(tabId).classList.remove("hidden");
     document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tabId));
