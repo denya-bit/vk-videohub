@@ -1,16 +1,13 @@
 const API_BASE = "http://141.98.164.186:8766";
 let userId = 0;
-let isAdmin = false;
 
 async function initVK() {
     try {
         await vkBridge.send("VKWebAppInit");
         const user = await vkBridge.send("VKWebAppGetUserInfo");
         userId = user.id;
-        isAdmin = (userId === 27760847);
         updateLimit();
         loadHistory();
-        if (isAdmin) document.getElementById("adminPanel").classList.remove("hidden");
     } catch (e) {
         console.log("VK Bridge init:", e);
         userId = 1;
@@ -25,17 +22,31 @@ async function authorizeVK() {
             app_id: 54794238,
             scope: "wall"
         });
+        console.log("Auth result:", JSON.stringify(result));
         if (result.access_token) {
-            await fetch(API_BASE + "/api/auth", {
+            const resp = await fetch(API_BASE + "/api/auth", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({access_token: result.access_token, refresh_token: result.refresh_token || "", user_id: userId})
+                body: JSON.stringify({
+                    access_token: result.access_token,
+                    refresh_token: result.refresh_token || "",
+                    user_id: userId
+                })
             });
-            showToast("✅ Токен сохранён!");
-            document.getElementById("authStatus").innerHTML = "<span style=\"color:var(--success)\">✓ Авторизован</span>";
+            const data = await resp.json();
+            console.log("Save result:", JSON.stringify(data));
+            showToast("Токен сохранен! scope: " + (result.scope || "wall"));
+            document.getElementById("authStatus").innerHTML = "<span style=\"color:var(--success)\">OK: " + (result.scope || "wall") + "</span>";
+        } else {
+            showToast("Нет access_token в ответе", true);
         }
     } catch (e) {
-        showToast("Ошибка: " + (e.message || e), true);
+        console.log("Auth error full:", e, JSON.stringify(e));
+        var msg = "Ошибка";
+        if (e && e.error_type) msg = e.error_type + ": " + (e.error_reason || "");
+        else if (e && e.message) msg = e.message;
+        showToast(msg, true);
+        document.getElementById("authStatus").innerHTML = "<span style=\"color:var(--error)\">" + msg + "</span>";
     }
 }
 
@@ -126,7 +137,7 @@ function showToast(msg, isError) {
     toast.textContent = msg;
     toast.className = "toast " + (isError ? "error" : "");
     setTimeout(() => toast.classList.add("show"), 10);
-    setTimeout(() => toast.classList.remove("show"), 3000);
+    setTimeout(() => toast.classList.remove("show"), 5000);
 }
 
 initVK();
