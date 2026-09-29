@@ -1,0 +1,12 @@
+services:
+  vk-videohub:
+    build: .
+    container_name: vk-videohub
+    restart: unless-stopped
+    ports:
+      - "8766:8766"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - VK_COMMUNITY_TOKEN=${VK_COMMUNITY_TOKEN}
+    mem_limit: 512m
