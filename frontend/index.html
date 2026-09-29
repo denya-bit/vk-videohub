@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VideoHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@vkontakte/vk-bridge@2.14.1/dist/browser.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <rect width="32" height="32" rx="8" fill="url(#grad1)"/>
+                        <path d="M12 10L22 16L12 22V10Z" fill="white"/>
+                        <defs><linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7C3AED"/><stop offset="1" stop-color="#3B82F6"/></linearGradient></defs>
+                    </svg>
+                </div>
+                <h1>Video<span class="accent">Hub</span></h1>
+            </div>
+            <div class="user-badge" id="userBadge">
+                <span class="limit-text">Осталось: <strong id="limitCount">5</strong>/5</span>
+            </div>
+        </header>
+
+        <!-- Main Tab -->
+        <main class="content" id="tabDownload">
+            <div class="glass-card hero-card">
+                <h2>Скачать видео</h2>
+                <p class="subtitle">YouTube · TikTok · Instagram · VK · Facebook · Pinterest · OK.ru · Rutube · Vimeo</p>
+                
+                <div class="input-group">
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                        </svg>
+                        <input type="url" id="urlInput" placeholder="Вставьте ссылку на видео..." autocomplete="off" spellcheck="false">
+                    </div>
+                    <button class="btn-primary" id="downloadBtn" onclick="startDownload()">
+                        <span class="btn-text">Скачать</span>
+                        <span class="btn-loader" id="btnLoader"></span>
+                    </button>
+                </div>
+
+                <div class="platform-badges">
+                    <span class="badge">YouTube</span>
+                    <span class="badge">TikTok</span>
+                    <span class="badge">Instagram</span>
+                    <span class="badge">VK</span>
+                    <span class="badge">Facebook</span>
+                    <span class="badge">Pinterest</span>
+                    <span class="badge">OK.ru</span>
+                    <span class="badge">Rutube</span>
+                    <span class="badge">Vimeo</span>
+                </div>
+            </div>
+
+            <!-- Video Preview -->
+            <div class="glass-card preview-card hidden" id="previewCard">
+                <div class="preview-info">
+                    <img id="previewThumb" class="preview-thumb" src="" alt="">
+                    <div class="preview-details">
+                        <h3 id="previewTitle"></h3>
+                        <p id="previewMeta"></p>
+                    </div>
+                </div>
+                <a class="btn-download" id="saveBtn" href="#" download>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Сохранить файл
+                </a>
+            </div>
+
+            <!-- History -->
+            <div class="glass-card history-card" id="historyCard">
+                <h3>История</h3>
+                <div class="history-list" id="historyList">
+                    <p class="empty-state">Пока пусто</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Stats Tab (admin) -->
+        <main class="content hidden" id="tabStats">
+            <div class="glass-card">
+                <h2>📊 Статистика</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="statToday">0</div>
+                        <div class="stat-label">Скачиваний сегодня</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statTotal">0</div>
+                        <div class="stat-label">Всего скачиваний</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statUsers">0</div>
+                        <div class="stat-label">Уникальных юзеров</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="statVisits">0</div>
+                        <div class="stat-label">Посещений</div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card">
+                <h3>Топ платформ</h3>
+                <div id="platformList"></div>
+            </div>
+            <div class="glass-card">
+                <h3>Топ пользователей</h3>
+                <div id="topUsers"></div>
+            </div>
+        </main>
+
+        <!-- Bottom Nav -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-tab="tabDownload" onclick="switchTab('tabDownload')">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Скачать</span>
+            </button>
+            <button class="nav-btn" data-tab="tabStats" onclick="switchTab('tabStats')">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span>Статистика</span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
