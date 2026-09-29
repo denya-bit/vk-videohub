@@ -17,36 +17,53 @@ async function initVK() {
 }
 
 async function authorizeVK() {
+    var statusEl = document.getElementById("authStatus");
+    statusEl.innerHTML = "<span style=\"color:var(--warning)\">Запрос токена...</span>";
     try {
+        console.log("Calling VKWebAppGetAuthToken...");
         const result = await vkBridge.send("VKWebAppGetAuthToken", {
             app_id: 54794238,
             scope: "wall"
         });
         console.log("Auth result:", JSON.stringify(result));
-        if (result.access_token) {
-            const resp = await fetch(API_BASE + "/api/auth", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    access_token: result.access_token,
-                    refresh_token: result.refresh_token || "",
-                    user_id: userId
-                })
-            });
-            const data = await resp.json();
-            console.log("Save result:", JSON.stringify(data));
-            showToast("Токен сохранен! scope: " + (result.scope || "wall"));
-            document.getElementById("authStatus").innerHTML = "<span style=\"color:var(--success)\">OK: " + (result.scope || "wall") + "</span>";
-        } else {
-            showToast("Нет access_token в ответе", true);
+        
+        if (!result.access_token) {
+            statusEl.innerHTML = "<span style=\"color:var(--error)\">Нет токена</span>";
+            return;
         }
+        
+        statusEl.innerHTML = "<span style=\"color:var(--warning)\">Сохранение токена...</span>";
+        console.log("Saving token to server...");
+        
+        const resp = await fetch(API_BASE + "/api/auth", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                access_token: result.access_token,
+                refresh_token: result.refresh_token || "",
+                user_id: userId
+            })
+        });
+        
+        const data = await resp.json();
+        console.log("Save result:", JSON.stringify(data));
+        
+        statusEl.innerHTML = "<span style=\"color:var(--success)\">OK! scope: " + (result.scope || "wall") + "</span>";
+        showToast("Токен сохранен!");
     } catch (e) {
-        console.log("Auth error full:", e, JSON.stringify(e));
-        var msg = "Ошибка";
+        console.log("Auth error:", e);
+        console.log("Error type:", typeof e);
+        console.log("Error keys:", Object.keys(e || {}));
+        console.log("Error str:", String(e));
+        console.log("Error json:", JSON.stringify(e));
+        
+        var msg = String(e);
+        if (e && e.message) msg = e.message;
         if (e && e.error_type) msg = e.error_type + ": " + (e.error_reason || "");
-        else if (e && e.message) msg = e.message;
+        if (e && e.error_data) msg += " | " + JSON.stringify(e.error_data);
+        
+        statusEl.innerHTML = "<span style=\"color:var(--error)\">" + msg + "</span>";
         showToast(msg, true);
-        document.getElementById("authStatus").innerHTML = "<span style=\"color:var(--error)\">" + msg + "</span>";
     }
 }
 
@@ -79,7 +96,7 @@ async function startDownload() {
             showToast(data.detail || "Ошибка", true);
         }
     } catch (e) {
-        showToast("Ошибка сети", true);
+        showToast("Ошибка сети: " + e.message, true);
     }
     btn.classList.remove("loading");
     btn.disabled = false;
