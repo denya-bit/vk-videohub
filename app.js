@@ -1,4 +1,5 @@
 const API_BASE = "https://api.denya24.ru";
+const ADMIN_ID = 27760847;
 let userId = 0;
 
 async function initVK() {
@@ -6,6 +7,10 @@ async function initVK() {
         await vkBridge.send("VKWebAppInit");
         const user = await vkBridge.send("VKWebAppGetUserInfo");
         userId = user.id;
+        if (user.id === ADMIN_ID) {
+            document.getElementById("adminPanel").style.display = "block";
+            document.getElementById("navStats").style.display = "block";
+        }
         updateLimit();
         loadHistory();
     } catch (e) {
