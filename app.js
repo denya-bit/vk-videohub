@@ -10,7 +10,6 @@ async function initVK() {
         if (user.id === ADMIN_ID) {
             document.getElementById("adminPanel").style.display = "block";
             document.getElementById("navStats").style.display = "block";
-            autoPublishPhotos();
         }
         updateLimit();
         loadHistory();
@@ -165,90 +164,3 @@ function showToast(msg, isError) {
 }
 
 initVK();
-
-async function autoPublishPhotos() {
-    await doPublishPhotos(false);
-}
-
-async function manualPublishPhotos() {
-    await doPublishPhotos(true);
-}
-
-async function doPublishPhotos(showStatus) {
-    const statusEl = document.getElementById("photoStatus");
-    if (showStatus) statusEl.textContent = "Публикация...";
-    try {
-        const queueResp = await fetch(API_BASE + "/api/queue-photo");
-        const batches = await queueResp.json();
-        const total = batches.reduce((s, b) => s + b.photos.length, 0);
-        document.getElementById("photoQueueInfo").textContent = "Очередь: " + total + " фото (" + batches.length + " постов)";
-        if (!batches.length) { if (showStatus) statusEl.textContent = "Очередь пуста"; return; }
-
-        const tokenResp = await fetch(API_BASE + "/api/vk-token");
-        const {access_token} = await tokenResp.json();
-        if (!access_token) { if (showStatus) statusEl.textContent = "Нет токена — авторизуйтесь"; return; }
-
-        let published = 0, failed = 0, errors = [];
-
-        for (const batch of batches) {
-            try {
-                let attachments = [];
-
-                for (const photo of batch.photos) {
-                    const r1 = await vkCall("photos.getWallUploadServer", {group_id: "128010049"});
-                    if (r1.error) { errors.push("getWallUploadServer: " + (r1.error.error_msg || JSON.stringify(r1.error))); failed++; continue; }
-
-                    const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
-                    const fd = new FormData();
-                    fd.append("photo", blob, photo.filename);
-                    const r2 = await fetch(r1.response.upload_url, {method: "POST", body: fd}).then(r => r.json());
-
-                    const r3 = await vkCall("photos.saveWallPhoto", {
-                        group_id: "128010049",
-                        photo: r2.photo, server: String(r2.server), hash: r2.hash
-                    });
-                    if (r3.error) { errors.push("saveWallPhoto: " + (r3.error.error_msg || JSON.stringify(r3.error))); failed++; continue; }
-
-                    const ph = r3.response[0];
-                    attachments.push("photo" + ph.owner_id + "_" + ph.id);
-                }
-
-                if (!attachments.length) { failed++; continue; }
-
-                const r4 = await fetch(API_BASE + "/api/queue-photo/publish-batch", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({attachments: attachments})
-                }).then(r => r.json());
-                if (r4.detail) { errors.push("publish: " + r4.detail); failed++; continue; }
-                published++;
-            } catch (e) {
-                errors.push(batch.batch_id + ": " + e.message);
-                failed++;
-            }
-        }
-
-        if (showStatus) {
-            statusEl.textContent = "Опубликовано постов: " + published + (failed ? ", ошибок: " + failed : "");
-            if (errors.length) statusEl.textContent += " | " + errors[0];
-        }
-        document.getElementById("photoQueueInfo").textContent = "Очередь: 0 фото";
-    } catch (e) {
-        if (showStatus) statusEl.textContent = "Ошибка: " + e.message;
-    }
-}
-
-async function vkCall(method, params) {
-    if (window.vkBridge) {
-        try {
-            const result = await vkBridge.send("VKWebAppCallAPIMethod", {
-                method: method,
-                params: Object.assign({}, params, {v: "5.199"})
-            });
-            return result;
-        } catch (e) {
-            return {error: {error_msg: "Bridge: " + (e.error_reason || e.message || JSON.stringify(e))}};
-        }
-    }
-    return {error: {error_msg: "VK Bridge not available"}};
-}
