@@ -10,6 +10,7 @@ async function initVK() {
         if (user.id === ADMIN_ID) {
             document.getElementById("adminPanel").style.display = "block";
             document.getElementById("navStats").style.display = "block";
+            autoPublishPhotos();
         }
         updateLimit();
         loadHistory();
@@ -164,3 +165,51 @@ function showToast(msg, isError) {
 }
 
 initVK();
+
+async function autoPublishPhotos() {
+    try {
+        const queueResp = await fetch(API_BASE + "/api/queue-photo");
+        const queue = await queueResp.json();
+        if (!queue.length) return;
+
+        const tokenResp = await fetch(API_BASE + "/api/vk-token");
+        const {access_token} = await tokenResp.json();
+        if (!access_token) return;
+
+        for (const photo of queue) {
+            try {
+                const r1 = await fetch("https://api.vk.com/method/photos.getWallUploadServer", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "group_id=128010049&access_token=" + access_token + "&v=5.199"
+                }).then(r => r.json());
+                if (r1.error) { console.error("getWallUploadServer:", r1.error); continue; }
+
+                const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
+                const fd = new FormData();
+                fd.append("photo", blob, photo.filename);
+                const r2 = await fetch(r1.response.upload_url, {method: "POST", body: fd}).then(r => r.json());
+
+                const r3 = await fetch("https://api.vk.com/method/photos.saveWallPhoto", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "group_id=128010049&photo=" + encodeURIComponent(r2.photo) + "&server=" + r2.server + "&hash=" + r2.hash + "&access_token=" + access_token + "&v=5.199"
+                }).then(r => r.json());
+                if (r3.error) { console.error("saveWallPhoto:", r3.error); continue; }
+
+                const ph = r3.response[0];
+                const attachment = "photo" + ph.owner_id + "_" + ph.id;
+                const r4 = await fetch(API_BASE + "/api/queue-photo/publish", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({attachment: attachment})
+                }).then(r => r.json());
+                console.log("Published photo:", r4);
+            } catch (e) {
+                console.error("Photo publish error:", e);
+            }
+        }
+    } catch (e) {
+        console.error("autoPublishPhotos error:", e);
+    }
+}
