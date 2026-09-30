@@ -167,106 +167,98 @@ function showToast(msg, isError) {
 initVK();
 
 async function autoPublishPhotos() {
-    try {
-        const queueResp = await fetch(API_BASE + "/api/queue-photo");
-        const queue = await queueResp.json();
-        document.getElementById("photoQueueInfo").textContent = "Очередь: " + queue.length + " фото";
-        if (!queue.length) return;
-
-        const tokenResp = await fetch(API_BASE + "/api/vk-token");
-        const {access_token} = await tokenResp.json();
-        if (!access_token) return;
-
-        for (const photo of queue) {
-            try {
-                const r1 = await fetch("https://api.vk.com/method/photos.getWallUploadServer", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                    body: "group_id=128010049&access_token=" + access_token + "&v=5.199"
-                }).then(r => r.json());
-                if (r1.error) { console.error("getWallUploadServer:", r1.error); continue; }
-
-                const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
-                const fd = new FormData();
-                fd.append("photo", blob, photo.filename);
-                const r2 = await fetch(r1.response.upload_url, {method: "POST", body: fd}).then(r => r.json());
-
-                const r3 = await fetch("https://api.vk.com/method/photos.saveWallPhoto", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                    body: "group_id=128010049&photo=" + encodeURIComponent(r2.photo) + "&server=" + r2.server + "&hash=" + r2.hash + "&access_token=" + access_token + "&v=5.199"
-                }).then(r => r.json());
-                if (r3.error) { console.error("saveWallPhoto:", r3.error); continue; }
-
-                const ph = r3.response[0];
-                const attachment = "photo" + ph.owner_id + "_" + ph.id;
-                const r4 = await fetch(API_BASE + "/api/queue-photo/publish", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({attachment: attachment})
-                }).then(r => r.json());
-                console.log("Published photo:", r4);
-            } catch (e) {
-                console.error("Photo publish error:", e);
-            }
-        }
-    } catch (e) {
-        console.error("autoPublishPhotos error:", e);
-    }
+    await doPublishPhotos(false);
 }
 
 async function manualPublishPhotos() {
+    await doPublishPhotos(true);
+}
+
+async function doPublishPhotos(showStatus) {
     const statusEl = document.getElementById("photoStatus");
-    statusEl.textContent = "Публикация...";
+    if (showStatus) statusEl.textContent = "Публикация...";
     try {
         const queueResp = await fetch(API_BASE + "/api/queue-photo");
-        const queue = await queueResp.json();
-        if (!queue.length) { statusEl.textContent = "Очередь пуста"; return; }
+        const batches = await queueResp.json();
+        const total = batches.reduce((s, b) => s + b.photos.length, 0);
+        document.getElementById("photoQueueInfo").textContent = "Очередь: " + total + " фото (" + batches.length + " постов)";
+        if (!batches.length) { if (showStatus) statusEl.textContent = "Очередь пуста"; return; }
 
         const tokenResp = await fetch(API_BASE + "/api/vk-token");
         const {access_token} = await tokenResp.json();
-        if (!access_token) { statusEl.textContent = "Нет токена — авторизуйтесь"; return; }
+        if (!access_token) { if (showStatus) statusEl.textContent = "Нет токена — авторизуйтесь"; return; }
 
         let published = 0, failed = 0, errors = [];
-        for (const photo of queue) {
+
+        for (const batch of batches) {
             try {
-                const r1 = await fetch("https://api.vk.com/method/photos.getWallUploadServer", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                    body: "group_id=128010049&access_token=" + access_token + "&v=5.199"
-                }).then(r => r.json());
-                if (r1.error) { errors.push("getWallUploadServer: " + r1.error.error_msg); failed++; continue; }
+                let attachments = [];
 
-                const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
-                const fd = new FormData();
-                fd.append("photo", blob, photo.filename);
-                const r2 = await fetch(r1.response.upload_url, {method: "POST", body: fd}).then(r => r.json());
+                for (const photo of batch.photos) {
+                    const r1 = await vkCall("photos.getWallUploadServer", {group_id: "128010049"}, access_token);
+                    if (r1.error) { errors.push("getWallUploadServer: " + r1.error.error_msg); continue; }
 
-                const r3 = await fetch("https://api.vk.com/method/photos.saveWallPhoto", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                    body: "group_id=128010049&photo=" + encodeURIComponent(r2.photo) + "&server=" + r2.server + "&hash=" + r2.hash + "&access_token=" + access_token + "&v=5.199"
-                }).then(r => r.json());
-                if (r3.error) { errors.push("saveWallPhoto: " + r3.error.error_msg); failed++; continue; }
+                    const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
+                    const fd = new FormData();
+                    fd.append("photo", blob, photo.filename);
+                    const r2 = await fetch(r1.response.upload_url, {method: "POST", body: fd}).then(r => r.json());
 
-                const ph = r3.response[0];
-                const attachment = "photo" + ph.owner_id + "_" + ph.id;
-                const r4 = await fetch(API_BASE + "/api/queue-photo/publish", {
+                    const r3 = await vkCall("photos.saveWallPhoto", {
+                        group_id: "128010049",
+                        photo: r2.photo, server: r2.server, hash: r2.hash
+                    }, access_token);
+                    if (r3.error) { errors.push("saveWallPhoto: " + r3.error.error_msg); continue; }
+
+                    const ph = r3.response[0];
+                    attachments.push("photo" + ph.owner_id + "_" + ph.id);
+                }
+
+                if (!attachments.length) { failed++; continue; }
+
+                const r4 = await fetch(API_BASE + "/api/queue-photo/publish-batch", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({attachment: attachment})
+                    body: JSON.stringify({attachments: attachments})
                 }).then(r => r.json());
                 if (r4.detail) { errors.push("publish: " + r4.detail); failed++; continue; }
                 published++;
             } catch (e) {
-                errors.push(photo.filename + ": " + e.message);
+                errors.push(batch.batch_id + ": " + e.message);
                 failed++;
             }
         }
-        statusEl.textContent = "Опубликовано: " + published + (failed ? ", ошибок: " + failed : "");
-        if (errors.length) statusEl.textContent += " | " + errors[0];
+
+        if (showStatus) {
+            statusEl.textContent = "Опубликовано постов: " + published + (failed ? ", ошибок: " + failed : "");
+            if (errors.length) statusEl.textContent += " | " + errors[0];
+        }
         document.getElementById("photoQueueInfo").textContent = "Очередь: 0 фото";
     } catch (e) {
-        statusEl.textContent = "Ошибка: " + e.message;
+        if (showStatus) statusEl.textContent = "Ошибка: " + e.message;
+    }
+}
+
+async function vkCall(method, params, token) {
+    const body = Object.entries(params).map(([k,v]) => k + "=" + encodeURIComponent(v)).join("&") + "&access_token=" + token + "&v=5.199";
+    try {
+        const r = await fetch("https://api.vk.com/method/" + method, {
+            method: "POST",
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            body: body
+        }).then(r => r.json());
+        return r;
+    } catch (e) {
+        if (window.vkBridge) {
+            try {
+                const result = await vkBridge.send("VKWebAppCallAPIMethod", {
+                    method: method,
+                    params: Object.assign({}, params, {access_token: token, v: "5.199"})
+                });
+                return result;
+            } catch (e2) {
+                return {error: {error_msg: "fetch+bridge failed: " + e.message}};
+            }
+        }
+        return {error: {error_msg: "Failed to fetch: " + e.message}};
     }
 }
