@@ -227,7 +227,7 @@ async function manualPublishPhotos() {
         const {access_token} = await tokenResp.json();
         if (!access_token) { statusEl.textContent = "Нет токена — авторизуйтесь"; return; }
 
-        let published = 0, failed = 0;
+        let published = 0, failed = 0, errors = [];
         for (const photo of queue) {
             try {
                 const r1 = await fetch("https://api.vk.com/method/photos.getWallUploadServer", {
@@ -235,7 +235,7 @@ async function manualPublishPhotos() {
                     headers: {"Content-Type": "application/x-www-form-urlencoded"},
                     body: "group_id=128010049&access_token=" + access_token + "&v=5.199"
                 }).then(r => r.json());
-                if (r1.error) { console.error("getWallUploadServer:", r1.error); failed++; continue; }
+                if (r1.error) { errors.push("getWallUploadServer: " + r1.error.error_msg); failed++; continue; }
 
                 const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
                 const fd = new FormData();
@@ -247,7 +247,7 @@ async function manualPublishPhotos() {
                     headers: {"Content-Type": "application/x-www-form-urlencoded"},
                     body: "group_id=128010049&photo=" + encodeURIComponent(r2.photo) + "&server=" + r2.server + "&hash=" + r2.hash + "&access_token=" + access_token + "&v=5.199"
                 }).then(r => r.json());
-                if (r3.error) { console.error("saveWallPhoto:", r3.error); failed++; continue; }
+                if (r3.error) { errors.push("saveWallPhoto: " + r3.error.error_msg); failed++; continue; }
 
                 const ph = r3.response[0];
                 const attachment = "photo" + ph.owner_id + "_" + ph.id;
@@ -256,13 +256,15 @@ async function manualPublishPhotos() {
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({attachment: attachment})
                 }).then(r => r.json());
+                if (r4.detail) { errors.push("publish: " + r4.detail); failed++; continue; }
                 published++;
             } catch (e) {
-                console.error("Photo publish error:", e);
+                errors.push(photo.filename + ": " + e.message);
                 failed++;
             }
         }
         statusEl.textContent = "Опубликовано: " + published + (failed ? ", ошибок: " + failed : "");
+        if (errors.length) statusEl.textContent += " | " + errors[0];
         document.getElementById("photoQueueInfo").textContent = "Очередь: 0 фото";
     } catch (e) {
         statusEl.textContent = "Ошибка: " + e.message;
