@@ -195,8 +195,8 @@ async function doPublishPhotos(showStatus) {
                 let attachments = [];
 
                 for (const photo of batch.photos) {
-                    const r1 = await vkCall("photos.getWallUploadServer", {group_id: "128010049"}, access_token);
-                    if (r1.error) { errors.push("getWallUploadServer: " + r1.error.error_msg); continue; }
+                    const r1 = await vkCall("photos.getWallUploadServer", {group_id: "128010049"});
+                    if (r1.error) { errors.push("getWallUploadServer: " + (r1.error.error_msg || JSON.stringify(r1.error))); failed++; continue; }
 
                     const blob = await fetch(API_BASE + "/api/queue-photo/" + photo.id + "/file").then(r => r.blob());
                     const fd = new FormData();
@@ -205,9 +205,9 @@ async function doPublishPhotos(showStatus) {
 
                     const r3 = await vkCall("photos.saveWallPhoto", {
                         group_id: "128010049",
-                        photo: r2.photo, server: r2.server, hash: r2.hash
-                    }, access_token);
-                    if (r3.error) { errors.push("saveWallPhoto: " + r3.error.error_msg); continue; }
+                        photo: r2.photo, server: String(r2.server), hash: r2.hash
+                    });
+                    if (r3.error) { errors.push("saveWallPhoto: " + (r3.error.error_msg || JSON.stringify(r3.error))); failed++; continue; }
 
                     const ph = r3.response[0];
                     attachments.push("photo" + ph.owner_id + "_" + ph.id);
@@ -238,27 +238,17 @@ async function doPublishPhotos(showStatus) {
     }
 }
 
-async function vkCall(method, params, token) {
-    const body = Object.entries(params).map(([k,v]) => k + "=" + encodeURIComponent(v)).join("&") + "&access_token=" + token + "&v=5.199";
-    try {
-        const r = await fetch("https://api.vk.com/method/" + method, {
-            method: "POST",
-            headers: {"Content-Type": "application/x-www-form-urlencoded"},
-            body: body
-        }).then(r => r.json());
-        return r;
-    } catch (e) {
-        if (window.vkBridge) {
-            try {
-                const result = await vkBridge.send("VKWebAppCallAPIMethod", {
-                    method: method,
-                    params: Object.assign({}, params, {access_token: token, v: "5.199"})
-                });
-                return result;
-            } catch (e2) {
-                return {error: {error_msg: "fetch+bridge failed: " + e.message}};
-            }
+async function vkCall(method, params) {
+    if (window.vkBridge) {
+        try {
+            const result = await vkBridge.send("VKWebAppCallAPIMethod", {
+                method: method,
+                params: Object.assign({}, params, {v: "5.199"})
+            });
+            return result;
+        } catch (e) {
+            return {error: {error_msg: "Bridge: " + (e.error_reason || e.message || JSON.stringify(e))}};
         }
-        return {error: {error_msg: "Failed to fetch: " + e.message}};
     }
+    return {error: {error_msg: "VK Bridge not available"}};
 }
