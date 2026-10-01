@@ -173,4 +173,38 @@ function showToast(msg, isError) {
     setTimeout(() => toast.classList.remove("show"), 5000);
 }
 
+// Pull-to-refresh
+(function() {
+    var startY = 0, pulling = false, indicator = null;
+    document.addEventListener("touchstart", function(e) {
+        if (window.scrollY === 0 && e.touches.length === 1) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    }, {passive: true});
+    document.addEventListener("touchmove", function(e) {
+        if (!pulling) return;
+        var diff = e.touches[0].clientY - startY;
+        if (diff > 80 && window.scrollY === 0) {
+            e.preventDefault();
+            if (!indicator) {
+                indicator = document.createElement("div");
+                indicator.style.cssText = "position:fixed;top:0;left:0;right:0;text-align:center;padding:12px;background:rgba(124,58,237,0.9);color:#fff;font-size:14px;z-index:9999;border-radius:0 0 12px 12px;";
+                indicator.textContent = "↓ Отпустите для обновления";
+                document.body.appendChild(indicator);
+            }
+        } else if (indicator) {
+            indicator.remove();
+            indicator = null;
+        }
+    }, {passive: false});
+    document.addEventListener("touchend", function() {
+        if (indicator) {
+            indicator.textContent = "⟳ Обновление...";
+            location.reload(true);
+        }
+        pulling = false;
+    }, {passive: true});
+})();
+
 initVK();
