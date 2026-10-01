@@ -114,26 +114,15 @@ function showPreview(data) {
     document.getElementById("previewMeta").textContent = data.platform + " · " + data.filesize_mb + " МБ";
     var saveBtn = document.getElementById("saveBtn");
     var fileUrl = API_BASE + data.download_url;
-    var fileName = (data.title || "video").replace(/[^a-zA-Z0-9а-яА-Я]/g, "_").substring(0, 50) + ".mp4";
-    saveBtn.onclick = function(e) {
-        e.preventDefault();
+    saveBtn.onclick = function() {
+        saveBtn.disabled = true;
         saveBtn.textContent = "Скачивание...";
-        fetch(fileUrl).then(function(r) { return r.blob(); }).then(function(blob) {
-            var a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(a.href);
-            saveBtn.textContent = "Сохранить на устройство";
-        }).catch(function() {
-            window.open(fileUrl, "_blank");
-            saveBtn.textContent = "Сохранить на устройство";
-        });
+        window.location.href = fileUrl;
+        setTimeout(function() {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = "<svg width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg> Сохранить файл";
+        }, 3000);
     };
-    saveBtn.href = "#";
-    saveBtn.textContent = "Сохранить на устройство";
     document.getElementById("previewCard").scrollIntoView({behavior: "smooth"});
 }
 
